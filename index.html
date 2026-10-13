@@ -703,6 +703,12 @@ function safeLSGet(key, fallback){ try{ const v = localStorage.getItem(key); ret
 function safeLSSet(key, val){ try{ localStorage.setItem(key, val); }catch(e){} }
 // ================= Analytics + report =================
 const APP_VERSION = 'v8 · 12 Oct 2026';
+/* Report routes. Fill in either or both; a blank one is hidden.
+   REPORT_EMAIL: address reports are emailed to (shown to users, so use one you are happy to publish).
+   REPORT_FORM_URL: link to your Google Form (or similar) with a single paste box. */
+const REPORT_EMAIL = '';
+const REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf24wWwdpJ6TJ4oBlWOkUzJzHABmIalhZaqdDzocsW0_1o9bQ/viewform';
+const REPORT_FORM_ENTRY = '';  /* optional: the number from entry.XXXXXXXXX in a pre-filled link; if set, the form opens with the report already filled in */
 function track(name){ try{ if(localStorage.getItem('p3a:analytics-off')==='1') return; if(window.goatcounter && typeof window.goatcounter.count==='function') window.goatcounter.count({path:'event/'+name, title:name, event:true}); }catch(e){} }
 const _tracked = new Set();
 function trackOnce(name){ if(_tracked.has(name)) return; _tracked.add(name); track(name); }
@@ -722,9 +728,11 @@ function openReport(kind, id, excerpt){
     +'<div class="rep-item"><b>'+escHtml(kind)+'</b> '+escHtml(String(id).split('|||').join(' › '))+'<br>'+escHtml(excerpt)+'</div>'
     +'<label class="small-note" for="rep-comment">What\'s wrong? (optional: wrong answer, out-of-date guidance, typo, confusing wording...)</label>'
     +'<textarea id="rep-comment" placeholder="e.g. Answer should be C: NICE now says..."></textarea>'
-    +'<div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap;">'+(navigator.share?'<button class="btn" id="rep-share">Share report</button>':'')
-    +'<button class="btn'+(navigator.share?' secondary':'')+'" id="rep-copy">Copy report</button><button class="btn secondary" id="rep-close">Close</button></div>'
-    +'<p class="small-note" id="rep-status" style="margin:8px 0 0;">Copy it, then paste it into a message to Alex.</p></div>';
+    +'<div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap;">'+((navigator.share&&!REPORT_FORM_URL)?'<button class="btn" id="rep-share">Share report</button>':'')
+    +(REPORT_EMAIL?'<a class="btn" id="rep-mail" href="#" role="button" style="text-decoration:none;display:inline-block;">Email report</a>':'')
+    +(REPORT_FORM_URL?'<button class="btn" id="rep-form">Send report</button>':'')
+    +'<button class="btn'+((navigator.share||REPORT_EMAIL||REPORT_FORM_URL)?' secondary':'')+'" id="rep-copy">Copy report</button><button class="btn secondary" id="rep-close">Close</button></div>'
+    +'<p class="small-note" id="rep-status" style="margin:8px 0 0;">'+((REPORT_FORM_URL&&REPORT_EMAIL)?'Email opens your mail app with the report filled in. Send report opens the form.':REPORT_FORM_URL?(REPORT_FORM_ENTRY?'Send report opens the form with your report already filled in. Just press Submit there.':'Send report copies your report, then opens the form in a new tab. Paste it into the box and press Submit.'):REPORT_EMAIL?'Opens your email app with the report filled in.':'Copy it, then paste it into a message to Alex.')+'</p></div>';
   document.body.appendChild(ov);
   const box=ov.querySelector('#rep-comment'); box.focus();
   const close=()=>{ ov.remove(); document.removeEventListener('keydown', onKey, true); };
@@ -733,7 +741,11 @@ function openReport(kind, id, excerpt){
   ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
   ov.querySelector('#rep-close').addEventListener('click', close);
   const txt=()=>reportText(kind, id, excerpt, box.value.trim());
-  ov.querySelector('#rep-copy').addEventListener('click', ()=>{ copyText(txt()).then(ok=>{ ov.querySelector('#rep-status').textContent = ok ? 'Copied. Paste it into a message to Alex.' : 'Couldn\'t copy automatically: select the text above and copy it by hand.'; if(ok) track('report/'+kind); }); });
+  ov.querySelector('#rep-copy').addEventListener('click', ()=>{ copyText(txt()).then(ok=>{ ov.querySelector('#rep-status').textContent = ok ? 'Copied. Paste it into your message or the form.' : 'Couldn\'t copy automatically: select the text above and copy it by hand.'; if(ok) track('report/'+kind); }); });
+  const ml=ov.querySelector('#rep-mail'); if(ml) ml.addEventListener('click', e=>{ e.preventDefault(); const t=txt(); location.href='mailto:'+REPORT_EMAIL+'?subject='+encodeURIComponent('Phase 3a report: '+kind)+'&body='+encodeURIComponent(t.slice(0,1500)); track('report/'+kind); ov.querySelector('#rep-status').textContent='If your email app did not open, use Copy report and send it to '+REPORT_EMAIL+'.'; });
+  const fm=ov.querySelector('#rep-form'); if(fm) fm.addEventListener('click', ()=>{ const t=txt(); const st=ov.querySelector('#rep-status');
+    if(REPORT_FORM_ENTRY){ const u=REPORT_FORM_URL+(REPORT_FORM_URL.indexOf('?')<0?'?':'&')+'usp=pp_url&entry.'+REPORT_FORM_ENTRY+'='+encodeURIComponent(t.slice(0,1500)); window.open(u,'_blank','noopener'); copyText(t); st.textContent='The form opened with your report filled in. Press Submit there. (A copy is also on your clipboard.)'; track('report/'+kind); }
+    else { copyText(t).then(ok=>{ window.open(REPORT_FORM_URL,'_blank','noopener'); st.textContent = ok ? 'Report copied. Paste it into the box in the form that just opened, then press Submit.' : 'Form opened. Use Copy report, then paste it into the form and press Submit.'; track('report/'+kind); }); } });
   const sh=ov.querySelector('#rep-share'); if(sh) sh.addEventListener('click', ()=>{ navigator.share({text:txt()}).then(()=>{ track('report/'+kind); close(); }).catch(()=>{}); });
 }
 function reportBtnHtml(kind, id, excerpt){ return '<button type="button" class="report-btn" data-report-kind="'+escAttr(kind)+'" data-report-id="'+escAttr(id)+'" data-report-ex="'+escAttr(excerpt)+'">Report</button>'; }
